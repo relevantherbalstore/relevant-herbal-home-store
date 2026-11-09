@@ -4,8 +4,7 @@ import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf,
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { addDoc, collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { auth, db, googleProvider, storage } from './lib/firebase'
+import { auth, db, googleProvider } from './lib/firebase'
 import { starterProducts } from './data/products'
 import type { Product } from './data/products'
 import './store.css'
@@ -14,6 +13,8 @@ import './admin.css'
 const ADMIN_EMAIL = 'relevantherbalpharma@gmail.com'
 const WHATSAPP_NUMBER = '9238392977'
 const DELIVERY_FEE = 250
+const MAX_SOURCE_IMAGE_SIZE = 5 * 1024 * 1024
+const MAX_COMPRESSED_IMAGE_SIZE = 450 * 1024
 const COPYRIGHT_YEAR = new Date().getFullYear()
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
 type CartLine = { product: Product; quantity: number }
@@ -108,22 +109,15 @@ export default function Storefront() {
     const imageFileValue = form.get('imageFile')
     const imageFile = imageFileValue instanceof File && imageFileValue.size > 0 ? imageFileValue : null
     if (!name || price <= 0) return
-    if (imageFile && (!imageFile.type.startsWith('image/') || imageFile.size > 5 * 1024 * 1024)) {
+    if (imageFile && (!imageFile.type.startsWith('image/') || imageFile.size > MAX_SOURCE_IMAGE_SIZE)) {
       setNotice('Choose an image file under 5 MB.')
-      return
-    }
-    if (imageFile && !storage) {
-      setNotice('Configure the Firebase Storage bucket before uploading product images.')
       return
     }
     setBusy(true)
     try {
       let imageUrl = String(form.get('imageUrl') ?? '').trim()
-      if (imageFile && storage) {
-        const safeName = imageFile.name.replace(/[^\w.-]/g, '_')
-        const uploaded = await uploadBytes(ref(storage, `products/${Date.now()}-${safeName}`), imageFile, { contentType: imageFile.type })
-        imageUrl = await getDownloadURL(uploaded.ref)
-      }
+      if (imageFile) imageUrl = await compressProductImage(imageFile)
+      else if (!imageUrl && editingProduct) imageUrl = editingProduct.imageUrl
       const productData = {
         name, price, discount: Math.min(Math.max(discount, 0), 90), stock: Math.max(stock, 0),
         category: String(form.get('category') ?? '').trim() || 'Remedies',
@@ -139,10 +133,9 @@ export default function Storefront() {
       }
       formElement.reset()
       setEditingProduct(null)
-    } catch {
-      setNotice(imageFile
-        ? 'Image upload needs Firebase Storage with billing enabled. Use an image URL for now, or enable Storage first.'
-        : `Could not ${editingProduct ? 'update' : 'save'} this product. Check your Firestore rules and Firebase setup.`)
+    } catch (error) {
+      const details = error instanceof Error ? error.message : 'Check your Firestore rules and Firebase setup.'
+      setNotice(`Could not ${editingProduct ? 'update' : 'save'} this product. ${details}`)
     } finally {
       setBusy(false)
     }
@@ -185,12 +178,57 @@ export default function Storefront() {
     </aside></div>}
 
     {adminOpen && <div className="overlay admin-overlay" onMouseDown={(event) => event.target === event.currentTarget && setAdminOpen(false)}><section className="admin-panel" aria-label="Store administration"><div className="panel-heading"><div><span className="eyebrow">Store management</span><h2>Admin workspace</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin panel"><X /></button></div>
-      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><div className="admin-products"><div className="form-title"><h3>Existing products</h3><p>Select a product to update its details.</p></div>{products.map((product) => <div className="admin-product-row" key={product.id}><span>{product.name}<small>{currency.format(product.price)}</small></span><button className="text-link" type="button" onClick={() => setEditingProduct(product)}><Pencil size={13} /> Edit</button></div>)}</div><form key={editingProduct?.id ?? 'new-product'} className="product-form" onSubmit={saveProduct}><div className="form-title"><h3>{editingProduct ? 'Edit product' : 'Add a product'}</h3><p>{editingProduct ? `Updating ${editingProduct.name}.` : 'Use verified product information and an image.'}</p></div><label>Product name<input name="name" required placeholder="e.g. Product name" defaultValue={editingProduct?.name ?? ''} /></label><div className="form-row"><label>Price (INR)<input name="price" type="number" min="1" required placeholder="0" defaultValue={editingProduct?.price ?? ''} /></label><label>Discount (%)<input name="discount" type="number" min="0" max="90" defaultValue={editingProduct?.discount ?? 0} /></label></div><div className="form-row"><label>Category<input name="category" placeholder="Remedies" defaultValue={editingProduct?.category ?? ''} /></label><label>Stock quantity<input name="stock" type="number" min="0" defaultValue={editingProduct?.stock ?? 0} /></label></div><label>Description<textarea name="description" rows={3} placeholder="Clear, factual product details" defaultValue={editingProduct?.description ?? ''} /></label><label>Upload image (Firebase Storage / Blaze, max 5 MB)<input name="imageFile" type="file" accept="image/*" /></label><label>Or use image URL<input name="imageUrl" type="url" placeholder="https://…" defaultValue={editingProduct?.imageUrl ?? ''} /></label><button className="button button-dark form-submit" type="submit" disabled={busy}>{busy ? 'Saving…' : editingProduct ? 'Save changes' : 'Publish product'} <ArrowRight size={16} /></button>{editingProduct && <button className="continue-link" type="button" onClick={() => setEditingProduct(null)}>Cancel editing</button>}</form></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
+      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><div className="admin-products"><div className="form-title"><h3>Existing products</h3><p>Select a product to update its details.</p></div>{products.map((product) => <div className="admin-product-row" key={product.id}><span>{product.name}<small>{currency.format(product.price)}</small></span><button className="text-link" type="button" onClick={() => setEditingProduct(product)}><Pencil size={13} /> Edit</button></div>)}</div><form key={editingProduct?.id ?? 'new-product'} className="product-form" onSubmit={saveProduct}><div className="form-title"><h3>{editingProduct ? 'Edit product' : 'Add a product'}</h3><p>{editingProduct ? `Updating ${editingProduct.name}.` : 'Use verified product information and an image.'}</p></div><label>Product name<input name="name" required placeholder="e.g. Product name" defaultValue={editingProduct?.name ?? ''} /></label><div className="form-row"><label>Price (INR)<input name="price" type="number" min="1" required placeholder="0" defaultValue={editingProduct?.price ?? ''} /></label><label>Discount (%)<input name="discount" type="number" min="0" max="90" defaultValue={editingProduct?.discount ?? 0} /></label></div><div className="form-row"><label>Category<input name="category" placeholder="Remedies" defaultValue={editingProduct?.category ?? ''} /></label><label>Stock quantity<input name="stock" type="number" min="0" defaultValue={editingProduct?.stock ?? 0} /></label></div><label>Description<textarea name="description" rows={3} placeholder="Clear, factual product details" defaultValue={editingProduct?.description ?? ''} /></label><label>Upload image (max 5 MB; compressed and saved with product)<input name="imageFile" type="file" accept="image/*" /></label><label>Or use image URL (leave empty to keep the current image)<input name="imageUrl" type="url" placeholder="https://…" defaultValue={editingProduct?.imageUrl.startsWith('data:') ? '' : editingProduct?.imageUrl ?? ''} /></label><button className="button button-dark form-submit" type="submit" disabled={busy}>{busy ? 'Saving…' : editingProduct ? 'Save changes' : 'Publish product'} <ArrowRight size={16} /></button>{editingProduct && <button className="continue-link" type="button" onClick={() => setEditingProduct(null)}>Cancel editing</button>}</form></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
     </section></div>}
   </div>
 }
 
 function getPrice(product: Product) { return Math.round(product.price * (1 - (product.discount || 0) / 100)) }
+
+async function compressProductImage(file: File): Promise<string> {
+  const image = new Image()
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('Could not read the selected image. Try another image file.'))
+      image.src = objectUrl
+    })
+
+    const scale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight))
+    let width = Math.round(image.naturalWidth * scale)
+    let height = Math.round(image.naturalHeight * scale)
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Image compression is not supported by this browser.')
+    context.fillStyle = '#ffffff'
+
+    while (Math.max(width, height) >= 320) {
+      canvas.width = width
+      canvas.height = height
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, width, height)
+      context.drawImage(image, 0, 0, width, height)
+      for (const quality of [0.82, 0.72, 0.62, 0.52, 0.42]) {
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+        if (blob && blob.size <= MAX_COMPRESSED_IMAGE_SIZE) {
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not encode the compressed image.'))
+            reader.onerror = () => reject(new Error('Could not encode the compressed image.'))
+            reader.readAsDataURL(blob)
+          })
+        }
+      }
+      width = Math.round(width * 0.8)
+      height = Math.round(height * 0.8)
+    }
+
+    throw new Error('This image could not be compressed small enough. Choose a simpler or smaller image.')
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
 
 function ProductCard({ product, index, quantity, onAdd }: { product: Product; index: number; quantity: number; onAdd: () => void }) {
   return <article className="product-card"><div className={`product-image image-tone-${index % 4}`}><ProductArtwork product={product} index={index} />{product.discount > 0 && <span className="sale-tag">-{product.discount}%</span>}<button className="favorite-button" aria-label={`Save ${product.name}`} onClick={(event) => event.currentTarget.classList.toggle('is-saved')}><Heart size={17} /></button><button className="quick-add" onClick={onAdd}><Plus size={16} /> Add to bag</button></div><div className="product-details"><div className="product-category">{product.category || 'Wellness essentials'}</div><h3>{product.name}</h3><p>{product.description || 'Thoughtfully selected for your everyday wellness routine.'}</p><div className="product-price"><b>{currency.format(getPrice(product))}</b>{product.discount > 0 && <del>{currency.format(product.price)}</del>}<button onClick={onAdd} aria-label={`Add ${product.name} to bag${quantity > 0 ? `; ${quantity} in bag` : ''}`} style={quantity > 0 ? { width: 'auto', minWidth: 27, padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 } : undefined}><Plus size={quantity > 0 ? 14 : 17} />{quantity > 0 && <span>{quantity}</span>}</button></div></div></article>

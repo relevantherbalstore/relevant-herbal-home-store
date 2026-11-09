@@ -19,13 +19,13 @@ Without Firebase configuration, the page shows the brochure-based draft catalogu
 3. Create a Cloud Firestore database.
 4. Copy the web app configuration values into `.env.local` using the variable names in `.env.example`.
 5. Publish the included `firestore.rules` to Firestore. Public visitors can read products; only the Google-authenticated, email-verified `relevantherbalpharma@gmail.com` account can create, update, or delete catalogue entries.
-6. Hosted image URLs work without Storage. Direct uploads require enabling Firebase Storage; the console currently requires upgrading this project from Spark to Blaze (billing account), so no upgrade was performed. If you choose to enable it, publish `storage.rules`; uploads are limited to images under 5 MB and restricted to the verified admin.
+6. Product images can be supplied as hosted URLs or uploaded through the admin form. Uploaded images are resized and compressed in the browser, then stored in Firestore with the product; Firebase Storage and a billing-plan upgrade are not required. Source images must be under 5 MB, and compressed images are limited to 450 KB to stay below Firestore's 1 MiB per-document limit.
 
 The client checks the same admin email for the management screen, while Firestore rules provide the actual authorization boundary. Never rely on a front-end-only admin check.
 
 ## Add products
 
-Sign in from the person/account icon using the verified Google account above. The admin panel can add name, price (INR), description, category, discount, stock, and an image URL; direct image uploads require Firebase Storage on the Blaze plan. The live catalogue updates from Firestore. The initial catalogue is transcribed from the supplied brochure. Its price list is marked March 2022, so every item's current price, availability, pack size, label, and image must be checked before accepting orders. Product copy is intentionally neutral and does not repeat health claims from the brochure.
+Sign in from the person/account icon using the verified Google account above. The admin panel can add or edit name, price (INR), description, category, discount, stock, and an image URL or uploaded image. Uploaded images are compressed and stored in Firestore, so Firestore quotas and document size limits apply. The live catalogue updates from Firestore. The initial catalogue is transcribed from the supplied brochure. Its price list is marked March 2022, so every item's current price, availability, pack size, label, and image must be checked before accepting orders. Product copy is intentionally neutral and does not repeat health claims from the brochure.
 
 ## Orders and delivery
 
