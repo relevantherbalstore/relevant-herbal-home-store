@@ -36,7 +36,7 @@ The bag summarizes item prices in INR, adds a separate delivery line, and opens 
 1. Create a GitHub repository and push this project to its `main` branch.
 2. In repository Settings → Pages, choose **GitHub Actions** as the build and deployment source.
 3. In repository Settings → Secrets and variables → Actions → Variables, add the six `VITE_FIREBASE_*` values from `.env.example`. The Firebase web configuration is public client configuration; Firestore rules must protect writes.
-4. Add the final GitHub Pages hostname to Firebase Authentication's Authorized domains.
+4. Add `relevantherbalstore.github.io` to Firebase Authentication's Authorized domains for this deployment.
 5. Push to `main` or run the **Deploy to GitHub Pages** workflow manually. The workflow builds the app with the repository subpath automatically.
 
 For a custom domain or a user/organization Pages repository, adjust the Vite `base` setting as appropriate. Firebase configuration and verified hosting domain must be in place for Google sign-in to work on the deployed site.
