@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf, Menu, Minus, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf, Menu, Minus, Pencil, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { addDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { auth, db, googleProvider, storage } from './lib/firebase'
 import { starterProducts } from './data/products'
 import type { Product } from './data/products'
 import './store.css'
+import './admin.css'
 
 const ADMIN_EMAIL = 'relevantherbalpharma@gmail.com'
 const WHATSAPP_NUMBER = '9238392977'
@@ -28,6 +29,7 @@ export default function Storefront() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const isAdmin = user?.email === ADMIN_EMAIL && user.emailVerified
 
   useEffect(() => auth ? onAuthStateChanged(auth, (nextUser) => {
@@ -38,7 +40,7 @@ export default function Storefront() {
     if (!db) return
     return onSnapshot(collection(db, 'products'), (snapshot) => {
       const liveProducts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Product)
-      setProducts([...liveProducts, ...starterProducts.filter((seed) => !liveProducts.some((item) => item.name === seed.name))])
+      setProducts([...liveProducts, ...starterProducts.filter((seed) => !liveProducts.some((item) => item.id === seed.id || item.name === seed.name))])
     }, () => setNotice('Could not load the live catalogue. Check your Firebase setup.'))
   }, [])
 
@@ -97,7 +99,8 @@ export default function Storefront() {
       setNotice('Connect Firebase and sign in with the authorized admin Google account to publish products.')
       return
     }
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const name = String(form.get('name') ?? '').trim()
     const price = Number(form.get('price'))
     const discount = Number(form.get('discount') || 0)
@@ -121,18 +124,25 @@ export default function Storefront() {
         const uploaded = await uploadBytes(ref(storage, `products/${Date.now()}-${safeName}`), imageFile, { contentType: imageFile.type })
         imageUrl = await getDownloadURL(uploaded.ref)
       }
-      await addDoc(collection(db, 'products'), {
+      const productData = {
         name, price, discount: Math.min(Math.max(discount, 0), 90), stock: Math.max(stock, 0),
         category: String(form.get('category') ?? '').trim() || 'Remedies',
         description: String(form.get('description') ?? '').trim(),
-        imageUrl, createdAt: serverTimestamp(),
-      })
-      event.currentTarget.reset()
-      setNotice('Product published to your catalogue.')
+        imageUrl, updatedAt: serverTimestamp(),
+      }
+      if (editingProduct) {
+        await setDoc(doc(db, 'products', editingProduct.id), productData, { merge: true })
+        setNotice('Product changes saved.')
+      } else {
+        await addDoc(collection(db, 'products'), { ...productData, createdAt: serverTimestamp() })
+        setNotice('Product published to your catalogue.')
+      }
+      formElement.reset()
+      setEditingProduct(null)
     } catch {
       setNotice(imageFile
         ? 'Image upload needs Firebase Storage with billing enabled. Use an image URL for now, or enable Storage first.'
-        : 'Could not save this product. Check your Firestore rules and Firebase setup.')
+        : `Could not ${editingProduct ? 'update' : 'save'} this product. Check your Firestore rules and Firebase setup.`)
     } finally {
       setBusy(false)
     }
@@ -175,7 +185,7 @@ export default function Storefront() {
     </aside></div>}
 
     {adminOpen && <div className="overlay admin-overlay" onMouseDown={(event) => event.target === event.currentTarget && setAdminOpen(false)}><section className="admin-panel" aria-label="Store administration"><div className="panel-heading"><div><span className="eyebrow">Store management</span><h2>Admin workspace</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin panel"><X /></button></div>
-      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><form className="product-form" onSubmit={saveProduct}><div className="form-title"><h3>Add a product</h3><p>Use verified product information and an image.</p></div><label>Product name<input name="name" required placeholder="e.g. Product name" /></label><div className="form-row"><label>Price (INR)<input name="price" type="number" min="1" required placeholder="0" /></label><label>Discount (%)<input name="discount" type="number" min="0" max="90" defaultValue="0" /></label></div><div className="form-row"><label>Category<input name="category" placeholder="Remedies" /></label><label>Stock quantity<input name="stock" type="number" min="0" defaultValue="0" /></label></div><label>Description<textarea name="description" rows={3} placeholder="Clear, factual product details" /></label><label>Upload image (Firebase Storage / Blaze, max 5 MB)<input name="imageFile" type="file" accept="image/*" /></label><label>Or use image URL<input name="imageUrl" type="url" placeholder="https://…" /></label><button className="button button-dark form-submit" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Publish product'} <ArrowRight size={16} /></button></form></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
+      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><div className="admin-products"><div className="form-title"><h3>Existing products</h3><p>Select a product to update its details.</p></div>{products.map((product) => <div className="admin-product-row" key={product.id}><span>{product.name}<small>{currency.format(product.price)}</small></span><button className="text-link" type="button" onClick={() => setEditingProduct(product)}><Pencil size={13} /> Edit</button></div>)}</div><form key={editingProduct?.id ?? 'new-product'} className="product-form" onSubmit={saveProduct}><div className="form-title"><h3>{editingProduct ? 'Edit product' : 'Add a product'}</h3><p>{editingProduct ? `Updating ${editingProduct.name}.` : 'Use verified product information and an image.'}</p></div><label>Product name<input name="name" required placeholder="e.g. Product name" defaultValue={editingProduct?.name ?? ''} /></label><div className="form-row"><label>Price (INR)<input name="price" type="number" min="1" required placeholder="0" defaultValue={editingProduct?.price ?? ''} /></label><label>Discount (%)<input name="discount" type="number" min="0" max="90" defaultValue={editingProduct?.discount ?? 0} /></label></div><div className="form-row"><label>Category<input name="category" placeholder="Remedies" defaultValue={editingProduct?.category ?? ''} /></label><label>Stock quantity<input name="stock" type="number" min="0" defaultValue={editingProduct?.stock ?? 0} /></label></div><label>Description<textarea name="description" rows={3} placeholder="Clear, factual product details" defaultValue={editingProduct?.description ?? ''} /></label><label>Upload image (Firebase Storage / Blaze, max 5 MB)<input name="imageFile" type="file" accept="image/*" /></label><label>Or use image URL<input name="imageUrl" type="url" placeholder="https://…" defaultValue={editingProduct?.imageUrl ?? ''} /></label><button className="button button-dark form-submit" type="submit" disabled={busy}>{busy ? 'Saving…' : editingProduct ? 'Save changes' : 'Publish product'} <ArrowRight size={16} /></button>{editingProduct && <button className="continue-link" type="button" onClick={() => setEditingProduct(null)}>Cancel editing</button>}</form></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
     </section></div>}
   </div>
 }

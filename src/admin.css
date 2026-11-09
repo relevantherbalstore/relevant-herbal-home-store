@@ -1,0 +1,34 @@
+.admin-products {
+  padding-top: 21px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-products > .form-title {
+  margin-bottom: 12px;
+}
+
+.admin-product-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  color: #344536;
+  font-size: 11px;
+}
+
+.admin-product-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-product-row small {
+  color: #85887c;
+  font-size: 9px;
+}
+
+.admin-product-row .text-link {
+  flex: 0 0 auto;
+}
