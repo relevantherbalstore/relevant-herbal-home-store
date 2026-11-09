@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf, Menu, Minus, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { addDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
@@ -10,7 +10,7 @@ import { starterProducts } from './data/products'
 import type { Product } from './data/products'
 import './store.css'
 
-const ADMIN_EMAIL = 'asharma5156@gmail.com'
+const ADMIN_EMAIL = 'relevantherbalpharma@gmail.com'
 const WHATSAPP_NUMBER = '9238392977'
 const DELIVERY_FEE = 250
 const COPYRIGHT_YEAR = new Date().getFullYear()
@@ -30,7 +30,10 @@ export default function Storefront() {
   const [busy, setBusy] = useState(false)
   const isAdmin = user?.email === ADMIN_EMAIL && user.emailVerified
 
-  useEffect(() => auth ? onAuthStateChanged(auth, setUser) : undefined, [])
+  useEffect(() => auth ? onAuthStateChanged(auth, (nextUser) => {
+    setUser(nextUser)
+    if (nextUser?.email === ADMIN_EMAIL && nextUser.emailVerified) setAdminOpen(true)
+  }) : undefined, [])
   useEffect(() => {
     if (!db) return
     return onSnapshot(collection(db, 'products'), (snapshot) => {
@@ -69,6 +72,11 @@ export default function Storefront() {
     }
     setBusy(true)
     try {
+      const isMobile = window.matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider)
+        return
+      }
       const result = await signInWithPopup(auth, googleProvider)
       if (result.user.email === ADMIN_EMAIL && result.user.emailVerified) {
         setAdminOpen(true)
@@ -154,7 +162,7 @@ export default function Storefront() {
       <section className="promise-row" aria-label="Store qualities"><div><Leaf size={19} /><span>Nature-led selection</span></div><div><Heart size={19} /><span>Care in every detail</span></div><div><ShieldCheck size={19} /><span>Personal order support</span></div><div><Truck size={19} /><span>Delivery arranged with you</span></div></section>
       <section className="collection-section" id="collection"><div className="section-heading"><div><div className="eyebrow">A considered collection</div><h2>Find your everyday <em>essentials.</em></h2><p>Browse our growing range. Need a little help? Message us with your questions.</p></div><a href="#care" className="text-link desktop-link">Need guidance? <ArrowRight size={15} /></a></div>
         <div className="catalog-toolbar"><div className="category-tabs" role="tablist" aria-label="Filter by category">{categories.map((item) => <button key={item} className={category === item ? 'category-tab active' : 'category-tab'} onClick={() => setCategory(item)}>{item}</button>)}</div><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search essentials" aria-label="Search products" /></label></div>
-        {visibleProducts.length ? <div className="product-grid">{visibleProducts.map((product, index) => <ProductCard key={product.id} product={product} index={index} onAdd={() => addToCart(product)} />)}</div> : <div className="empty-products"><Leaf size={27} /><h3>Your collection is taking root.</h3><p>Our first product range is being prepared. Please check back soon.</p></div>}
+        {visibleProducts.length ? <div className="product-grid">{visibleProducts.map((product, index) => <ProductCard key={product.id} product={product} index={index} quantity={cart.find((line) => line.product.id === product.id)?.quantity ?? 0} onAdd={() => addToCart(product)} />)}</div> : <div className="empty-products"><Leaf size={27} /><h3>Your collection is taking root.</h3><p>Our first product range is being prepared. Please check back soon.</p></div>}
         <div className="catalog-footnote"><ShieldCheck size={15} /> Brochure prices are from March 2022 and need confirmation. Product details are not medical advice.</div>
       </section>
       <section className="story-section" id="our-story"><div className="story-visual"><div className="story-card"><span className="story-number">01</span><Leaf size={48} strokeWidth={1.1} /><span className="story-script">A slower<br />kind of care.</span></div><div className="story-orbit orbit-a" /><div className="story-orbit orbit-b" /><span className="story-side">ROOTED IN CARE · NATURALLY</span></div><div className="story-copy"><div className="eyebrow">Our approach</div><h2>Good care begins with <em>good questions.</em></h2><p>Relevant Herbal Home Store is here to make discovering and ordering homeopathic and herbal products a little simpler. We value clear product information, personal service, and thoughtful care at every step.</p><p>Our catalogue is being prepared with care. We do not make medical claims—please consult a licensed healthcare professional for diagnosis or treatment advice.</p><a className="button button-outline" href="#care">How to reach us <ArrowRight size={16} /></a></div></section>
@@ -174,8 +182,8 @@ export default function Storefront() {
 
 function getPrice(product: Product) { return Math.round(product.price * (1 - (product.discount || 0) / 100)) }
 
-function ProductCard({ product, index, onAdd }: { product: Product; index: number; onAdd: () => void }) {
-  return <article className="product-card"><div className={`product-image image-tone-${index % 4}`}><ProductArtwork product={product} index={index} />{product.discount > 0 && <span className="sale-tag">-{product.discount}%</span>}<button className="favorite-button" aria-label={`Save ${product.name}`} onClick={(event) => event.currentTarget.classList.toggle('is-saved')}><Heart size={17} /></button><button className="quick-add" onClick={onAdd}><Plus size={16} /> Add to bag</button></div><div className="product-details"><div className="product-category">{product.category || 'Wellness essentials'}</div><h3>{product.name}</h3><p>{product.description || 'Thoughtfully selected for your everyday wellness routine.'}</p><div className="product-price"><b>{currency.format(getPrice(product))}</b>{product.discount > 0 && <del>{currency.format(product.price)}</del>}<button onClick={onAdd} aria-label={`Add ${product.name} to bag`}><Plus size={17} /></button></div></div></article>
+function ProductCard({ product, index, quantity, onAdd }: { product: Product; index: number; quantity: number; onAdd: () => void }) {
+  return <article className="product-card"><div className={`product-image image-tone-${index % 4}`}><ProductArtwork product={product} index={index} />{product.discount > 0 && <span className="sale-tag">-{product.discount}%</span>}<button className="favorite-button" aria-label={`Save ${product.name}`} onClick={(event) => event.currentTarget.classList.toggle('is-saved')}><Heart size={17} /></button><button className="quick-add" onClick={onAdd}><Plus size={16} /> Add to bag</button></div><div className="product-details"><div className="product-category">{product.category || 'Wellness essentials'}</div><h3>{product.name}</h3><p>{product.description || 'Thoughtfully selected for your everyday wellness routine.'}</p><div className="product-price"><b>{currency.format(getPrice(product))}</b>{product.discount > 0 && <del>{currency.format(product.price)}</del>}<button onClick={onAdd} aria-label={`Add ${product.name} to bag${quantity > 0 ? `; ${quantity} in bag` : ''}`} style={quantity > 0 ? { width: 'auto', minWidth: 27, padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 } : undefined}><Plus size={quantity > 0 ? 14 : 17} />{quantity > 0 && <span>{quantity}</span>}</button></div></div></article>
 }
 
 function ProductArtwork({ product, index }: { product: Product; index: number }) {

@@ -18,7 +18,7 @@ Without Firebase configuration, the page shows the brochure-based draft catalogu
 2. In Firebase Authentication, enable Google as a sign-in provider. Add the final GitHub Pages domain to Authorized domains.
 3. Create a Cloud Firestore database.
 4. Copy the web app configuration values into `.env.local` using the variable names in `.env.example`.
-5. Publish the included `firestore.rules` to Firestore. Public visitors can read products; only the Google-authenticated, email-verified `asharma5156@gmail.com` account can create, update, or delete catalogue entries.
+5. Publish the included `firestore.rules` to Firestore. Public visitors can read products; only the Google-authenticated, email-verified `relevantherbalpharma@gmail.com` account can create, update, or delete catalogue entries.
 6. Hosted image URLs work without Storage. Direct uploads require enabling Firebase Storage; the console currently requires upgrading this project from Spark to Blaze (billing account), so no upgrade was performed. If you choose to enable it, publish `storage.rules`; uploads are limited to images under 5 MB and restricted to the verified admin.
 
 The client checks the same admin email for the management screen, while Firestore rules provide the actual authorization boundary. Never rely on a front-end-only admin check.
