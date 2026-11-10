@@ -1,0 +1,23 @@
+.catalog-toolbar {
+  justify-content: flex-end;
+}
+
+.product-quantity-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.product-quantity-controls button {
+  flex: 0 0 27px;
+  margin-left: 0;
+  border-radius: 50%;
+}
+
+.product-quantity-controls span {
+  min-width: 16px;
+  color: #344536;
+  font-size: 11px;
+  text-align: center;
+}
