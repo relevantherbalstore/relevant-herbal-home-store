@@ -21,3 +21,26 @@
   font-size: 11px;
   text-align: center;
 }
+
+.card-edit-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 18px;
+  background: #fbfaf4e8;
+  color: #4f644b;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card-edit-button:hover {
+  background: #fff;
+}
