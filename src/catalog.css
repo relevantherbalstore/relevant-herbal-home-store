@@ -44,3 +44,29 @@
 .card-edit-button:hover {
   background: #fff;
 }
+
+.remove-product-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 9px 12px;
+  border: 1px solid #e8c8c3;
+  border-radius: 3px;
+  background: #fff8f6;
+  color: #a33e36;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.remove-product-button:hover:not(:disabled) {
+  background: #f9eae7;
+}
+
+.remove-product-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}

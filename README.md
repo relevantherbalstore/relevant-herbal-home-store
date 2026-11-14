@@ -25,7 +25,7 @@ The client checks the same admin email for the management screen, while Firestor
 
 ## Add products
 
-Sign in from the person/account icon using the verified Google account above. The admin panel can add or edit name, price (INR), description, category, discount, stock, and an image URL or uploaded image. Uploaded images are compressed and stored in Firestore, so Firestore quotas and document size limits apply. The live catalogue updates from Firestore. The initial catalogue is transcribed from the supplied brochure. Its price list is marked March 2022, so every item's current price, availability, pack size, label, and image must be checked before accepting orders. Product copy is intentionally neutral and does not repeat health claims from the brochure.
+Sign in from the person/account icon using the verified Google account above. The admin panel can add products; admins can edit or remove existing products from each product card. Product details include name, price (INR), description, discount, stock, and an image URL or uploaded image. Uploaded images are compressed and stored in Firestore, so Firestore quotas and document size limits apply. The live catalogue updates from Firestore. The initial catalogue is transcribed from the supplied brochure. Its price list is marked March 2022, so every item's current price, availability, pack size, label, and image must be checked before accepting orders. Product copy is intentionally neutral and does not repeat health claims from the brochure.
 
 ## Orders and delivery
 

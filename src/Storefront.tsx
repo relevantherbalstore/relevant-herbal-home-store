@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf, Menu, Minus, Pencil, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, BadgeCheck, Check, CircleUserRound, Heart, Leaf, Menu, Minus, Pencil, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Trash2, Truck, X } from 'lucide-react'
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { addDoc, collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db, googleProvider } from './lib/firebase'
 import { starterProducts } from './data/products'
 import type { Product } from './data/products'
@@ -40,8 +40,11 @@ export default function Storefront() {
   useEffect(() => {
     if (!db) return
     return onSnapshot(collection(db, 'products'), (snapshot) => {
-      const liveProducts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Product)
-      setProducts([...liveProducts, ...starterProducts.filter((seed) => !liveProducts.some((item) => item.id === seed.id || item.name === seed.name))])
+      const liveProducts = snapshot.docs
+        .filter((item) => item.data().deleted !== true)
+        .map((item) => ({ id: item.id, ...item.data() }) as Product)
+      const storedIds = new Set(snapshot.docs.map((item) => item.id))
+      setProducts([...liveProducts, ...starterProducts.filter((seed) => !storedIds.has(seed.id) && !liveProducts.some((item) => item.name === seed.name))])
     }, () => setNotice('Could not load the live catalogue. Check your Firebase setup.'))
   }, [])
 
@@ -139,6 +142,33 @@ export default function Storefront() {
     }
   }
 
+  async function removeProduct() {
+    if (!db || !isAdmin || !editingProduct) {
+      setNotice('Sign in with the authorized admin Google account to remove products.')
+      return
+    }
+    const product = editingProduct
+    if (!window.confirm(`Remove "${product.name}" from the storefront?`)) return
+
+    setBusy(true)
+    try {
+      const productRef = doc(db, 'products', product.id)
+      if (product.id.startsWith('brochure-')) {
+        await setDoc(productRef, { deleted: true, updatedAt: serverTimestamp() })
+      } else {
+        await deleteDoc(productRef)
+      }
+      setCart((current) => current.filter((line) => line.product.id !== product.id))
+      setEditingProduct(null)
+      setNotice(`${product.name} was removed from the storefront.`)
+    } catch (error) {
+      const details = error instanceof Error ? error.message : 'Check your Firestore rules and Firebase setup.'
+      setNotice(`Could not remove ${product.name}. ${details}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function sendOrder() {
     if (!cart.length) return
     const lines = cart.map(({ product, quantity }) => `• ${product.name} × ${quantity} — ${currency.format(getPrice(product) * quantity)}`)
@@ -178,15 +208,16 @@ export default function Storefront() {
     {adminOpen && <div className="overlay admin-overlay" onMouseDown={(event) => event.target === event.currentTarget && setAdminOpen(false)}><section className="admin-panel" aria-label="Store administration"><div className="panel-heading"><div><span className="eyebrow">Store management</span><h2>Admin workspace</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin panel"><X /></button></div>
       {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><ProductForm key="new-product" busy={busy} onSubmit={saveProduct} /></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
     </section></div>}
-    {isAdmin && editingProduct && <div className="overlay edit-product-overlay" onMouseDown={(event) => event.target === event.currentTarget && !busy && setEditingProduct(null)}><section className="admin-panel edit-product-panel" role="dialog" aria-modal="true" aria-labelledby="edit-product-title"><div className="panel-heading"><div><span className="eyebrow">Product details</span><h2 id="edit-product-title">Edit {editingProduct.name}</h2></div><button className="icon-button" onClick={() => setEditingProduct(null)} disabled={busy} aria-label="Close edit product popup"><X /></button></div><ProductForm product={editingProduct} busy={busy} onSubmit={saveProduct} onCancel={() => setEditingProduct(null)} /></section></div>}
+    {isAdmin && editingProduct && <div className="overlay edit-product-overlay" onMouseDown={(event) => event.target === event.currentTarget && !busy && setEditingProduct(null)}><section className="admin-panel edit-product-panel" role="dialog" aria-modal="true" aria-labelledby="edit-product-title"><div className="panel-heading"><div><span className="eyebrow">Product details</span><h2 id="edit-product-title">Edit {editingProduct.name}</h2></div><button className="icon-button" onClick={() => setEditingProduct(null)} disabled={busy} aria-label="Close edit product popup"><X /></button></div><ProductForm product={editingProduct} busy={busy} onSubmit={saveProduct} onCancel={() => setEditingProduct(null)} onRemove={removeProduct} /></section></div>}
   </div>
 }
 
-function ProductForm({ product, busy, onSubmit, onCancel }: {
+function ProductForm({ product, busy, onSubmit, onCancel, onRemove }: {
   product?: Product
   busy: boolean
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onCancel?: () => void
+  onRemove?: () => void
 }) {
   return <form className="product-form" onSubmit={onSubmit}>
     {!product && <div className="form-title"><h3>Add a product</h3><p>Use verified product information and an image.</p></div>}
@@ -198,6 +229,7 @@ function ProductForm({ product, busy, onSubmit, onCancel }: {
     <label>Or use image URL (leave empty to keep the current image)<input name="imageUrl" type="url" placeholder="https://…" defaultValue={product?.imageUrl.startsWith('data:') ? '' : product?.imageUrl ?? ''} /></label>
     <button className="button button-dark form-submit" type="submit" disabled={busy}>{busy ? 'Saving…' : product ? 'Save changes' : 'Publish product'} <ArrowRight size={16} /></button>
     {onCancel && <button className="continue-link" type="button" onClick={onCancel} disabled={busy}>Cancel</button>}
+    {onRemove && <button className="remove-product-button" type="button" onClick={onRemove} disabled={busy}><Trash2 size={15} /> Remove product</button>}
   </form>
 }
 
