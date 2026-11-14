@@ -2,6 +2,17 @@
   justify-content: flex-end;
 }
 
+.catalog-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.catalog-heading-actions > .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .product-quantity-controls {
   display: flex;
   align-items: center;

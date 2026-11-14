@@ -10,3 +10,10 @@
   max-height: min(92vh, 920px);
   overflow: auto;
 }
+
+.admin-panel-hint {
+  margin: 18px 0 0;
+  color: #707568;
+  font-size: 11px;
+  line-height: 1.7;
+}

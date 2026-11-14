@@ -30,12 +30,12 @@ export default function Storefront() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [addProductOpen, setAddProductOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const isAdmin = user?.email === ADMIN_EMAIL && user.emailVerified
 
   useEffect(() => auth ? onAuthStateChanged(auth, (nextUser) => {
     setUser(nextUser)
-    if (nextUser?.email === ADMIN_EMAIL && nextUser.emailVerified) setAdminOpen(true)
   }) : undefined, [])
   useEffect(() => {
     if (!db) return
@@ -83,7 +83,7 @@ export default function Storefront() {
       }
       const result = await signInWithPopup(auth, googleProvider)
       if (result.user.email === ADMIN_EMAIL && result.user.emailVerified) {
-        setAdminOpen(true)
+        setAdminOpen(false)
         setNotice('Welcome, store admin.')
       } else {
         setNotice(`Signed in as ${result.user.email ?? 'Google user'}. Admin tools are limited to the authorized store account.`)
@@ -133,7 +133,8 @@ export default function Storefront() {
         setNotice('Product published to your catalogue.')
       }
       formElement.reset()
-      setEditingProduct(null)
+      if (editingProduct) setEditingProduct(null)
+      else setAddProductOpen(false)
     } catch (error) {
       const details = error instanceof Error ? error.message : 'Check your Firestore rules and Firebase setup.'
       setNotice(`Could not ${editingProduct ? 'update' : 'save'} this product. ${details}`)
@@ -191,7 +192,7 @@ export default function Storefront() {
         <div className="hero-art" aria-label="Botanical illustration"><div className="hero-stamp"><span>GOOD<br />THINGS<br /><i>grow</i></span><Leaf size={17} /></div><div className="sun-disc" /><div className="plant plant-one"><span /><span /><span /><span /><span /><span /></div><div className="plant plant-two"><span /><span /><span /><span /></div><div className="vase"><div className="vase-neck" /><div className="vase-body"><span>R<br />H</span></div></div><div className="art-caption">GROW WELL, LIVE WELL <span>✳</span> 01 / 04</div></div><div className="hero-side-note">NATURAL CARE · CONSIDERED DAILY</div>
       </section>
       <section className="promise-row" aria-label="Store qualities"><div><Leaf size={19} /><span>Nature-led selection</span></div><div><Heart size={19} /><span>Care in every detail</span></div><div><ShieldCheck size={19} /><span>Personal order support</span></div><div><Truck size={19} /><span>Delivery arranged with you</span></div></section>
-      <section className="collection-section" id="collection"><div className="section-heading"><div><div className="eyebrow">A considered collection</div><h2>Find your everyday <em>essentials.</em></h2><p>Browse our growing range. Need a little help? Message us with your questions.</p></div><a href="#care" className="text-link desktop-link">Need guidance? <ArrowRight size={15} /></a></div>
+      <section className="collection-section" id="collection"><div className="section-heading"><div><div className="eyebrow">A considered collection</div><h2>Find your everyday <em>essentials.</em></h2><p>Browse our growing range. Need a little help? Message us with your questions.</p></div><div className="catalog-heading-actions">{isAdmin && <button className="button button-dark" type="button" onClick={() => setAddProductOpen(true)}><Plus size={16} /> Add product</button>}<a href="#care" className="text-link desktop-link">Need guidance? <ArrowRight size={15} /></a></div></div>
         <div className="catalog-toolbar"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all products" aria-label="Search all products" /></label></div>
         {visibleProducts.length ? <div className="product-grid">{visibleProducts.map((product, index) => <ProductCard key={product.id} product={product} index={index} quantity={cart.find((line) => line.product.id === product.id)?.quantity ?? 0} isAdmin={isAdmin} onAdd={() => addToCart(product)} onRemove={() => changeQuantity(product.id, -1)} onEdit={() => setEditingProduct(product)} />)}</div> : <div className="empty-products"><Leaf size={27} /><h3>{query ? 'No matching products.' : 'Your collection is taking root.'}</h3><p>{query ? 'Try another search.' : 'Our first product range is being prepared. Please check back soon.'}</p></div>}
         <div className="catalog-footnote"><ShieldCheck size={15} /> Brochure prices are from March 2022 and need confirmation. Product details are not medical advice.</div>
@@ -206,8 +207,9 @@ export default function Storefront() {
     </aside></div>}
 
     {adminOpen && <div className="overlay admin-overlay" onMouseDown={(event) => event.target === event.currentTarget && setAdminOpen(false)}><section className="admin-panel" aria-label="Store administration"><div className="panel-heading"><div><span className="eyebrow">Store management</span><h2>Admin workspace</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin panel"><X /></button></div>
-      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><ProductForm key="new-product" busy={busy} onSubmit={saveProduct} /></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
+      {isAdmin ? <><div className="admin-identity"><span><ShieldCheck size={19} /></span><div><b>{user.displayName || 'Store admin'}</b><small>{user.email} · Google verified</small></div><button className="text-link" onClick={() => auth && signOut(auth)}>Sign out</button></div><p className="admin-panel-hint">Use the <b>Add product</b> button above the catalogue to add a product, or the <b>Edit</b> button on any product card to update or remove it.</p></> : <div className="admin-login"><span className="admin-lock"><ShieldCheck size={26} /></span><h3>Admin access</h3><p>Sign in with the authorized Google account to manage the store catalogue.</p><button className="button button-dark" onClick={handleGoogleSignIn} disabled={busy}>{busy ? 'Connecting…' : 'Continue with Google'} <ArrowRight size={16} /></button><small>Only the verified {ADMIN_EMAIL} account can manage products.</small></div>}
     </section></div>}
+    {isAdmin && addProductOpen && <div className="overlay edit-product-overlay" onMouseDown={(event) => event.target === event.currentTarget && !busy && setAddProductOpen(false)}><section className="admin-panel edit-product-panel" role="dialog" aria-modal="true" aria-labelledby="add-product-title"><div className="panel-heading"><div><span className="eyebrow">New catalogue item</span><h2 id="add-product-title">Add a product</h2></div><button className="icon-button" onClick={() => setAddProductOpen(false)} disabled={busy} aria-label="Close add product popup"><X /></button></div><ProductForm busy={busy} onSubmit={saveProduct} onCancel={() => setAddProductOpen(false)} /></section></div>}
     {isAdmin && editingProduct && <div className="overlay edit-product-overlay" onMouseDown={(event) => event.target === event.currentTarget && !busy && setEditingProduct(null)}><section className="admin-panel edit-product-panel" role="dialog" aria-modal="true" aria-labelledby="edit-product-title"><div className="panel-heading"><div><span className="eyebrow">Product details</span><h2 id="edit-product-title">Edit {editingProduct.name}</h2></div><button className="icon-button" onClick={() => setEditingProduct(null)} disabled={busy} aria-label="Close edit product popup"><X /></button></div><ProductForm product={editingProduct} busy={busy} onSubmit={saveProduct} onCancel={() => setEditingProduct(null)} onRemove={removeProduct} /></section></div>}
   </div>
 }
